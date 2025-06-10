@@ -1,0 +1,4 @@
+
+# Ignore Go build cache (optional but recommended)
+/pkg/
+/bin/

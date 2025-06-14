@@ -9,27 +9,27 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>网页遥控器</title>
     <style>
-        body, html { 
-            margin: 0; padding: 0; width: 100%; height: 100%; 
-            overflow: hidden; font-family: sans-serif; 
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; font-family: sans-serif;
             background-color: #333; color: #eee;
             user-select: none; -webkit-user-select: none; /* 禁止选择文本 */
              -webkit-tap-highlight-color: transparent; /* 禁止点击高亮 */
         }
         * { box-sizing: border-box; }
-       
+
         #container { display: flex; flex-direction: column; height: 100%; padding: 5px; gap: 5px;}
         #status { padding: 5px 10px; background-color: #444; font-size: 12px; text-align: center;}
-        
+
         .keyboard-row { display: flex; gap: 5px; height: 40px; }
          #keyboardInput { flex-grow: 1; padding: 0 10px; border: 1px solid #555; background-color: #222; color: white; border-radius: 4px; font-size: 16px;}
-        
+
         /* 核心触摸板：touch-action: none 至关重要，阻止浏览器默认触摸行为（滚动/缩放） */
-         .touchpad { 
+         .touchpad {
             flex-grow: 1; /* 占据剩余空间 */
             background-color: #555; border: 1px dashed #888;
-            display: flex; justify-content: center; align-items: center; 
-            touch-action: none; 
+            display: flex; justify-content: center; align-items: center;
+            touch-action: none;
             border-radius: 8px;
             font-size: 14px; color: #aaa;
             overflow: hidden;
@@ -37,23 +37,23 @@
         .buttons-row { display: flex; width: 100%; height: 60px; gap: 5px;}
         .keys-row { display: flex; width: 100%; height: 45px; gap: 5px;}
 
-        .btn { 
+        .btn {
             flex: 1; font-size: 16px; border: 1px solid #666; background-color: #4a4a4a;
-            display: flex; justify-content: center; align-items: center; 
+            display: flex; justify-content: center; align-items: center;
             cursor: pointer; border-radius: 4px;
             touch-action: none; /* 按钮也阻止 */
          }
         .btn:active, .btn.active { background-color: #777; color: white; border-color: #999;}
         .btn-key { font-size: 14px; background-color: #3a3a3a;}
-        .btn-drag.active { 
+        .btn-drag.active {
             background-color: #007bff; /* 更清晰的蓝色 */
-            color: white; 
+            color: white;
             outline: 2px solid white; /* 添加白色轮廓 */
             outline-offset: -2px; /* 轮廓向内 */
         }
         #leftClick, #rightClick { flex: 2;}
         #dragLock { flex: 1; background-color: #666;}
-        
+
         .status-ok { color: #2ecc71;}
         .status-error { color: #e74c3c;}
         .status-connecting { color: #f1c40f;}
@@ -234,7 +234,7 @@
 <body>
  <div id="container">
     <div id="status" class="status-error">未连接</div>
-    
+
     <div class="keyboard-row">
          <input type="text" id="keyboardInput" placeholder="在此输入文本...">
          <div id="sendTextBtn" class="btn btn-key" style="flex: 0 0 60px;">发送</div>
@@ -303,7 +303,7 @@
          </div>
          <div class="keyboard-button-row">
              <!-- Caps Lock 占位符，暂不实现功能 -->
-             <div class="keyboard-button" data-key="capslock" style="flex: 1.3;">Caps</div> 
+             <div class="keyboard-button" data-key="capslock" style="flex: 1.3;">Caps</div>
              <div class="keyboard-button" data-key="a">a</div>
              <div class="keyboard-button" data-key="s">s</div>
              <div class="keyboard-button" data-key="d">d</div>
@@ -343,12 +343,12 @@
      </div>
 
     <div id="touchpad" class="touchpad">触摸 & 滚动区 (单击 / 双指滚动)</div>
-    
+
     <div class="buttons-area"> <!-- Added wrapper div -->
         <div class="slider-row" style="display: flex; align-items: center; gap: 10px; padding: 5px 0; height: 35px;">
             <label for="sensitivitySlider" style="font-size: 14px; flex-shrink: 0; color: #ccc;">速度:</label>
             <input type="range" id="sensitivitySlider" min="0.5" max="20" step="0.1" value="1.5" style="flex-grow: 1; height: 10px; cursor: pointer;">
-            <input type="number" id="sensitivityInput" min="0.5" max="20" step="0.1" value="1.5" style="width: 60px; background-color: #222; color: #eee; border: 1px solid #555; border-radius: 4px; text-align: center; font-size: 14px; padding: 2px; margin: 0 5px;"> 
+            <input type="number" id="sensitivityInput" min="0.5" max="20" step="0.1" value="1.5" style="width: 60px; background-color: #222; color: #eee; border: 1px solid #555; border-radius: 4px; text-align: center; font-size: 14px; padding: 2px; margin: 0 5px;">
             <span id="sensitivityValue" style="font-size: 14px; min-width: 35px; text-align: right; color: #ccc;">1.5x</span>
         </div>
 
@@ -361,8 +361,9 @@
         </div>
         <!-- 移动到此：切换键盘按钮 -->
         <div class="keys-row" style="height: 35px; margin-top: 5px;"> <!-- 添加一点上边距 -->
-            <div id="toggleKeyboardBtn" class="btn btn-key" style="flex: 1; background-color: #555;">⌨️ 显示/隐藏键盘</div>
-            <div id="toggleLayoutBtn" class="btn btn-key" style="flex: 1; background-color: #555;">切换横屏操作</div> <!-- Changed Text -->
+            <div id="toggleKeyboardBtn" class="btn btn-key" style="flex: 1; background-color: #555;">⌨️ 键盘</div>
+            <div id="toggleLayoutBtn" class="btn btn-key" style="flex: 1; background-color: #555;">🔄 布局</div>
+            <!-- Removed Trail Toggle Button -->
         </div>
     </div> <!-- Closing wrapper div -->
  </div>
@@ -386,7 +387,8 @@
         // --- 新增元素引用结束 ---
         const sensitivitySlider = document.getElementById('sensitivitySlider');
         const sensitivityValue = document.getElementById('sensitivityValue');
-        const sensitivityInput = document.getElementById('sensitivityInput'); 
+        const sensitivityInput = document.getElementById('sensitivityInput');
+        // Removed toggleTrailBtn reference
 
         // let mouseSensitivity = parseFloat(sensitivitySlider.value); // Initialize sensitivity - Replaced by localStorage logic below
 
@@ -409,13 +411,13 @@
         function updateSensitivity(newValue) {
             let numValue = parseFloat(newValue);
             // 如果解析失败或为空，则使用当前的 mouseSensitivity 值 (避免重置为默认值)
-            if (isNaN(numValue) || newValue === '') { 
-                numValue = mouseSensitivity; 
+            if (isNaN(numValue) || newValue === '') {
+                numValue = mouseSensitivity;
             }
-            
+
             // 限制值在 0.5 到 20.0 之间
             numValue = Math.max(0.5, Math.min(20.0, numValue));
-            
+
             // 更新全局变量和所有相关元素
             mouseSensitivity = numValue;
             const formattedValue = numValue.toFixed(1); // 格式化为一位小数
@@ -449,7 +451,7 @@
             const wsUrl = `ws://${window.location.host}/ws`;
             console.log(`尝试连接到 ${wsUrl}...`);
             setStatus(`正在连接 ${wsUrl}...`, 'connecting');
-            
+
             ws = new WebSocket(wsUrl);
 
             ws.onopen = () => {
@@ -468,16 +470,38 @@
                  // 尝试重连
                  reconnectTimer = setTimeout(connect, reconnectInterval);
             };
-            
+
             ws.onerror = (error) => {
                 console.error('WebSocket 错误: ', error);
                  isConnected = false;
                  setStatus('⚠️ 连接错误', 'error');
                  ws.close(); // 确保触发 onclose 进行重连
             };
-             // 收到消息（本例不用）
-            // ws.onmessage = (event) => { console.log("Server says: ", event.data);};
-        }
+
+            // --- 新增：处理来自服务器的消息 ---
+            ws.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    console.log("收到消息:", message); // Log received message
+
+                    // 处理状态更新消息
+                    if (message.type === 'state_update' && message.state && typeof message.state.pointerTrailEnabled === 'boolean') {
+                        const isEnabled = message.state.pointerTrailEnabled;
+                        if (toggleTrailBtn) { // Check if button exists
+                            toggleTrailBtn.textContent = isEnabled ? '🖱️ 关闭轨迹' : '🖱️ 开启轨迹';
+                            console.log(`鼠标轨迹按钮更新为: ${toggleTrailBtn.textContent}`);
+                        } else {
+                            console.warn("找不到 toggleTrailBtn 元素来更新文本。");
+                        }
+                    }
+                    // 在此添加其他消息类型的处理逻辑 (如果需要)
+                    // Removed pointer trail state update handling
+                } catch (e) {
+                    console.error("处理消息时出错:", e, "原始数据:", event.data);
+                }
+            };
+            // --- 消息处理结束 ---
+        } // connect 函数的结束括号
 
         function setStatus(text, type) {
              statusDiv.textContent = text;
@@ -489,7 +513,7 @@
             if (ws && ws.readyState === WebSocket.OPEN) {
                  try {
                    // 在发送前打印指令，用于调试
-                   // console.log("Sending command:", JSON.stringify(command)); 
+                   // console.log("Sending command:", JSON.stringify(command));
                    ws.send(JSON.stringify(command));
                  } catch(e) {
                     console.error("Send command error:", e);
@@ -502,13 +526,13 @@
         let startX, startY; // 用于判断是否是点击
         let touchIdentifier = null; // 跟踪主触摸点
         let isMoving = false;
-        
+
         let scrollLastY = null;
         const SCROLL_SENSITIVITY = 1.5; // 滚动灵敏度
         const MOVE_THRESHOLD = 8; // 移动超过此像素才认为是在移动，否则可能是点击
         const DOUBLE_TAP_THRESHOLD = 350; // ms
         let lastTapTime = 0;
-        
+
         let dragLockActive = false; // 拖拽锁定状态
         let isDraggingViaTouch = false; // 标记当前触摸是否触发了拖拽
         let isCapsLockActive = false; // 新增：跟踪 Caps Lock 状态
@@ -577,7 +601,7 @@
 
                  const dx = Math.round(touch.clientX - lastX);
                  const dy = Math.round(touch.clientY - lastY);
-                 
+
                  // 判断是否超过移动阈值
                  if (!isMoving && (Math.abs(touch.clientX - startX) > MOVE_THRESHOLD || Math.abs(touch.clientY - startY) > MOVE_THRESHOLD)) {
                     isMoving = true;
@@ -594,7 +618,7 @@
                  }
                  lastX = touch.clientX;
                  lastY = touch.clientY;
-            } 
+            }
             // 双指滚动
             else if (e.touches.length === 2 && scrollLastY !== null) {
                  const currentAvgY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
@@ -615,7 +639,7 @@
 
              // 确保是最后一个手指离开 且 不是在滚动
              if (e.touches.length === 0 && scrollLastY === null) {
-                 
+
                  // 如果之前触发了拖拽，则抬起鼠标
                  if(isDraggingViaTouch) {
                      sendCommand({ type: 'mouse_up', button: 'left' });
@@ -645,7 +669,7 @@
                // isDraggingViaTouch = false; // 已在上面处理
             }
         };
-        
+
         touchpad.addEventListener('touchend', handleTouchEnd, { passive: false });
         touchpad.addEventListener('touchcancel', handleTouchEnd, { passive: false }); // 意外中断时也要处理
 
@@ -656,7 +680,7 @@
 
         leftClickBtn.addEventListener('pointerdown', () => sendCommand({ type: 'click' })); // 简化：直接发送命令
         // leftClickBtn.addEventListener('pointerup', () => buttonRelease(leftClickBtn)); // 不再需要单独的 release
-        // leftClickBtn.addEventListener('pointerout', () => buttonRelease(leftClickBtn)); 
+        // leftClickBtn.addEventListener('pointerout', () => buttonRelease(leftClickBtn));
 
         rightClickBtn.addEventListener('pointerdown', () => sendCommand({ type: 'right_click' }));
         // rightClickBtn.addEventListener('pointerup', () => buttonRelease(rightClickBtn));
@@ -708,13 +732,13 @@
 
          // --- 新增：统一处理所有键盘按键（包括修饰键） ---
          const allKeyButtons = document.querySelectorAll('.btn-key[data-key], .keyboard-button[data-key]');
- 
+
          allKeyButtons.forEach(btn => {
              const key = btn.dataset.key;
- 
+
              btn.addEventListener('pointerdown', () => {
                  if (!isConnected) return; // 未连接时不处理
- 
+
                  if (key === 'ctrl' || key === 'alt' || key === 'shift') {
                      // 切换修饰键状态
                      if (key === 'ctrl') isCtrlActive = !isCtrlActive;
@@ -740,20 +764,20 @@
                      if (isCtrlActive) activeModifiers.push('ctrl');
                      if (isAltActive) activeModifiers.push('alt');
                      if (isShiftActive) activeModifiers.push('shift');
-                     
+
                      sendCommand({ type: 'key_press', value: key, modifiers: activeModifiers });
                      // 模拟瞬间按下效果
                      btn.classList.add('active');
                  }
              });
- 
+
              btn.addEventListener('pointerup', () => {
                  // 只为非粘滞键移除 active 状态
                  if (key !== 'ctrl' && key !== 'alt' && key !== 'shift' && key !== 'capslock') {
                      btn.classList.remove('active');
                  }
              });
- 
+
              btn.addEventListener('pointerout', () => {
                  // 如果指针移出，也为非粘滞键移除 active 状态
                  if (key !== 'ctrl' && key !== 'alt' && key !== 'shift' && key !== 'capslock') {
@@ -784,14 +808,16 @@
              }
          });
 
+         // Removed: 切换鼠标轨迹按钮 logic
+
 
         // --- 启动连接 ---
-        connect(); 
+        connect();
 
         // --- 新增：更新键盘大小写显示 ---
         function updateKeyboardCase() {
             // 选择所有表示单个字母的按钮 (简单方法：检查 data-key 是否为单个小写字母)
-            const letterButtons = fullKeyboard.querySelectorAll('.keyboard-button'); 
+            const letterButtons = fullKeyboard.querySelectorAll('.keyboard-button');
             letterButtons.forEach(btn => {
                 const key = btn.dataset.key;
                 // 仅处理单个字母按键
@@ -805,7 +831,7 @@
         updateKeyboardCase();
 
         // Initialize sensitivity display and values on load using the value from localStorage or default
-        updateSensitivity(mouseSensitivity); 
+        updateSensitivity(mouseSensitivity);
 
     </script>
 </body>

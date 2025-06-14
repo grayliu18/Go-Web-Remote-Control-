@@ -1,7 +1,7 @@
 package main
 
 import (
-	"context" // Added for server shutdown
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,20 +10,20 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"sort" // Added for sorting IPs
+	"sort"
 	"strings"
-	"sync" // Added for shutdownOnce
+	"sync" // Needed for Windows API calls
 	"time"
 
+	// Needed for pointer operations with syscall
+	// Needed for pointer operations with syscall
 	"github.com/gen2brain/beeep"
-	"github.com/getlantern/systray"              // Added systray
-	registry "golang.org/x/sys/windows/registry" // Added registry import with alias
+	"github.com/getlantern/systray"
+	registry "golang.org/x/sys/windows/registry"
 
-	// Removed: "github.com/getlantern/systray/example/icon"
-	_ "embed" // Added for go:embed
+	_ "embed"
 
-	// Added for startup functionality
-
+	// For startup functionality
 	"github.com/go-vgo/robotgo"
 	"github.com/gorilla/websocket"
 )
@@ -40,12 +40,29 @@ var (
 	shutdownOnce sync.Once
 	selectedIP   string
 	ipMutex      sync.RWMutex // Mutex for selectedIP
+	// isPointerTrailEnabled bool // Removed: Track pointer trail state
 )
 
+// init() function removed as it was empty
+
+// showCursor() function definition removed
+
+// Removed: Load user32.dll for pointer trails
+// var (
+// 	user32                   = syscall.NewLazyDLL("user32.dll")
+// 	procSystemParametersInfo = user32.NewProc("SystemParametersInfoW")
+// )
+
 const (
-	startupAppName = "GoRemoteControl" // Name for registry key
-	defaultPort    = 61336
-	// htmlFilePath     = "index.html" // Removed: No longer needed as HTML is embedded
+	// Windows API Constants
+	// SPI_SETPOINTERTRAILS = 0x005B // 控制指针阴影 (Pointer Shadow), 不是轨迹!
+	// SPI_SETMOUSETRAILS = 0x005D // Removed: 设置鼠标轨迹长度 (0=关闭, >0=开启并设置长度)
+	// SPI_GETMOUSETRAILS   = 0x005E // 获取鼠标轨迹长度 (如果需要)
+	SPIF_UPDATEINIFILE = 0x01 // Update user profile
+	SPIF_SENDCHANGE    = 0x02 // Broadcast WM_SETTINGCHANGE
+
+	startupAppName   = "GoRemoteControl"
+	defaultPort      = 61336
 	selfCheckWait    = 3 * time.Second
 	selfCheckTimeout = 5 * time.Second
 	notifyTimeoutMs  = 5000 // beeep uses milliseconds
@@ -62,7 +79,6 @@ var upgrader = websocket.Upgrader{
 }
 
 // Command structure for incoming WebSocket messages
-// {{ modifications }}
 type Command struct {
 	Type      string   `json:"type"`                // 指令类型
 	Dx        int      `json:"dx,omitempty"`        // 鼠标水平移动距离
@@ -80,12 +96,9 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	// Set content type to HTML
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	// Write the embedded HTML content to the response
 	_, err := w.Write(indexHTMLContent)
 	if err != nil {
-		// Log error if writing response fails
 		log.Printf("写入嵌入的 HTML 响应时出错: %v", err)
 		http.Error(w, "无法提供页面", http.StatusInternalServerError)
 	}
@@ -98,38 +111,40 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		log.Printf("WebSocket 升级失败: %v", err)
 		return
 	}
-	defer ws.Close() // Ensure connection is closed when function returns
+	defer ws.Close()
 
 	clientAddr := ws.RemoteAddr().String()
 	log.Printf("客户端已连接: %s", clientAddr)
 
-	// Send connection notification
 	notify("网页键鼠", fmt.Sprintf("客户端已连接: %s", clientAddr), "")
 
-	// Handle incoming messages in a separate loop for this connection
 	handleMessages(ws)
 }
 
 // handleMessages reads and processes messages from a WebSocket client
 func handleMessages(ws *websocket.Conn) {
 	clientAddr := ws.RemoteAddr().String()
+	var isLeftMouseDown bool = false  // Track left mouse button state for this connection
+	var isRightMouseDown bool = false // Track right mouse button state for this connection
+
 	defer func() {
-		// Clean up mouse state on disconnect
-		robotgo.MouseUp("left")
-		robotgo.MouseUp("right")
+		// Clean up mouse state on disconnect only if buttons were down
+		if isLeftMouseDown {
+			log.Printf("连接 %s 断开时检测到左键按下，执行 MouseUp('left')", clientAddr)
+			robotgo.MouseUp("left")
+		}
+		if isRightMouseDown {
+			log.Printf("连接 %s 断开时检测到右键按下，执行 MouseUp('right')", clientAddr)
+			robotgo.MouseUp("right")
+		}
 		// Clean up modifier keys state on disconnect (important!)
-		// robotgo.KeyToggle("shift", "up") // Example, robotgo doesn't directly track state like this
-		// robotgo.KeyToggle("ctrl", "up")
-		// robotgo.KeyToggle("alt", "up")
-		// robotgo.KeyToggle("cmd", "up") // For mac
-		// It's generally safer to rely on the OS handling modifier key releases
-		// when the application exits or connection drops. Explicitly sending 'up'
-		// might interfere if the user is physically holding the key.
+		// Note: Explicitly toggling modifiers 'up' on disconnect might be unreliable
+		// or interfere if the user is physically holding the key.
+		// Relying on OS cleanup is generally safer.
 		log.Printf("清理并关闭与 %s 的连接。", clientAddr)
 	}()
 
 	for {
-		// Read message from browser
 		_, msgBytes, err := ws.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
@@ -137,36 +152,74 @@ func handleMessages(ws *websocket.Conn) {
 			} else {
 				log.Printf("客户端断开连接: %s", clientAddr)
 			}
-			break // Exit loop on error or disconnect
+			break
 		}
 
-		// Parse the JSON message
 		var cmd Command
 		if err := json.Unmarshal(msgBytes, &cmd); err != nil {
 			log.Printf("收到非JSON格式消息来自 %s: %s, 错误: %v", clientAddr, string(msgBytes), err)
 			continue
 		}
 
-		// Execute the command
-		// log.Printf("收到指令: %+v", cmd) // Debug: Print received command
-		err = executeCommand(cmd)
-		if err != nil {
-			log.Printf("执行命令失败 (来自 %s): %v - 命令: %+v", clientAddr, err, cmd)
+		// Execute command and get potential state update
+		stateUpdate, cmdErr := executeCommand(cmd)
+		if cmdErr != nil {
+			log.Printf("执行命令失败 (来自 %s): %v - 命令: %+v", clientAddr, cmdErr, cmd)
+			// Consider if we should continue or break on command execution error? Current logic continues.
+		}
+
+		// Send state update back to client if available
+		if stateUpdate != nil {
+			updateMsg := map[string]interface{}{
+				"type":  "state_update",
+				"state": stateUpdate,
+			}
+			if writeErr := ws.WriteJSON(updateMsg); writeErr != nil {
+				log.Printf("发送状态更新失败 (客户端: %s): %v", clientAddr, writeErr)
+				// Don't break the loop just because sending update failed
+			}
+		}
+
+		// Update mouse button state *after* command execution attempt
+		button := strings.ToLower(cmd.Button)
+		// Default to left button if not specified for mouse down/up events
+		if button == "" && (cmd.Type == "mouse_down" || cmd.Type == "mouse_up") {
+			button = "left"
+		}
+
+		switch cmd.Type {
+		case "mouse_down":
+			if button == "left" {
+				isLeftMouseDown = true
+			} else if button == "right" {
+				isRightMouseDown = true
+			}
+			// Add other buttons like "middle" if needed
+		case "mouse_up":
+			if button == "left" {
+				isLeftMouseDown = false
+			} else if button == "right" {
+				isRightMouseDown = false
+			}
+			// Add other buttons like "middle" if needed
 		}
 	}
 }
 
 // executeCommand performs the action based on the command type
-func executeCommand(cmd Command) error {
+// It now returns a map containing potential state updates for the client, and an error.
+func executeCommand(cmd Command) (map[string]interface{}, error) {
+	var stateUpdate map[string]interface{} // Initialize as nil
+
 	switch cmd.Type {
 	case "move":
 		if cmd.Dx != 0 || cmd.Dy != 0 {
 			robotgo.MoveRelative(cmd.Dx, cmd.Dy)
 		}
 	case "click":
-		robotgo.Click("left", false) // false = not double click
+		robotgo.Click("left", false)
 	case "double_click":
-		robotgo.Click("left", true) // true = double click
+		robotgo.Click("left", true)
 	case "right_click":
 		robotgo.Click("right", false)
 	case "scroll":
@@ -174,28 +227,24 @@ func executeCommand(cmd Command) error {
 			robotgo.Scroll(0, -cmd.Amount)
 		}
 	case "mouse_down":
-		// Frontend only sends 'left' currently, but support others if needed
 		button := strings.ToLower(cmd.Button)
 		if button == "" {
-			button = "left" // Default to left if not specified
+			button = "left"
 		}
 		robotgo.Toggle(button, "down")
 	case "mouse_up":
 		button := strings.ToLower(cmd.Button)
 		if button == "" {
-			button = "left" // Default to left if not specified
+			button = "left"
 		}
 		robotgo.Toggle(button, "up")
 	case "key_press":
-		// {{ modifications }}
 		key := translateKey(cmd.Value)
 		if key != "" {
-			// Check for modifiers
 			if len(cmd.Modifiers) > 0 {
-				// Ensure modifiers are also translated if necessary (though ctrl, alt, shift are usually standard)
 				validModifiers := []string{}
 				for _, mod := range cmd.Modifiers {
-					translatedMod := translateKey(mod) // Translate modifier keys too
+					translatedMod := translateKey(mod)
 					if translatedMod != "" {
 						validModifiers = append(validModifiers, translatedMod)
 					} else {
@@ -203,15 +252,11 @@ func executeCommand(cmd Command) error {
 					}
 				}
 				if len(validModifiers) > 0 {
-					log.Printf("执行 KeyTap: key='%s', modifiers=%v", key, validModifiers) // Debug
-					robotgo.KeyTap(key, validModifiers)                                  // Use KeyTap with modifiers
+					robotgo.KeyTap(key, validModifiers)
 				} else {
-					log.Printf("执行 KeyTap (无有效修饰键): key='%s'", key) // Debug
-					robotgo.KeyTap(key)                             // Fallback if all modifiers were invalid
+					robotgo.KeyTap(key)
 				}
 			} else {
-				// No modifiers sent
-				log.Printf("执行 KeyTap (无修饰键): key='%s'", key) // Debug
 				robotgo.KeyTap(key)
 			}
 		} else {
@@ -223,12 +268,17 @@ func executeCommand(cmd Command) error {
 		}
 	case "shutdown":
 		log.Println("接收到关机指令，准备执行...")
-		go executeShutdown() // Run in goroutine to avoid blocking websocket handler? Maybe not necessary.
+		go executeShutdown()
+	// Removed: case "toggle_mouse_trail"
 	default:
-		return fmt.Errorf("未知的指令类型: %s", cmd.Type)
+		return nil, fmt.Errorf("未知的指令类型: %s", cmd.Type) // Return nil stateUpdate on error
 	}
-	return nil
+
+	// Default return for cases that don't explicitly return
+	return stateUpdate, nil // Return potentially nil stateUpdate and nil error
 }
+
+// Removed: func setMouseTrails(length uintptr) error { ... }
 
 // translateKey converts frontend key names to robotgo key names
 func translateKey(keyName string) string {
@@ -245,11 +295,11 @@ func translateKey(keyName string) string {
 		"left":      "left",
 		"right":     "right",
 		"space":     "space",
-		"shift":     "shift", // Modifier key
-		"ctrl":      "ctrl",  // Modifier key
-		"alt":       "alt",   // Modifier key
-		"win":       "cmd",   // Map 'win' to 'cmd' (robotgo uses 'cmd' for Win/Command)
-		"cmd":       "cmd",   // Allow 'cmd' directly too
+		"shift":     "shift",
+		"ctrl":      "ctrl",
+		"alt":       "alt",
+		"win":       "cmd", // Map 'win' to 'cmd' (robotgo uses 'cmd' for Win/Command)
+		"cmd":       "cmd", // Allow 'cmd' directly too
 		"capslock":  "capslock",
 		"f1":        "f1", "f2": "f2", "f3": "f3", "f4": "f4", "f5": "f5", "f6": "f6",
 		"f7": "f7", "f8": "f8", "f9": "f9", "f10": "f10", "f11": "f11", "f12": "f12",
@@ -258,9 +308,8 @@ func translateKey(keyName string) string {
 		"q": "q", "w": "w", "e": "e", "r": "r", "t": "t", "y": "y", "u": "u", "i": "i", "o": "o", "p": "p", "[": "[", "]": "]", "\\": "\\",
 		"a": "a", "s": "s", "d": "d", "f": "f", "g": "g", "h": "h", "j": "j", "k": "k", "l": "l", ";": ";", "'": "'",
 		"z": "z", "x": "x", "c": "c", "v": "v", "b": "b", "n": "n", "m": "m", ",": ",", ".": ".", "/": "/",
-		"delete": "delete", // Added delete key mapping
-		// Keys that might not be needed for KeyTap but good to have?
-		// "pageup": "pageup", "pagedown": "pagedown", "home": "home", "end": "end", "insert": "insert",
+		"delete": "delete",
+		// Other potential keys (pageup, pagedown, home, end, insert) omitted for now
 	}
 	lowerKeyName := strings.ToLower(keyName)
 	if translated, ok := keyMap[lowerKeyName]; ok {
@@ -286,7 +335,7 @@ func executeShutdown() {
 		// Requires root privileges usually
 		cmd = exec.Command("shutdown", "-h", "now")
 		log.Println("警告: Linux 关机通常需要 root 权限。")
-	case "darwin": // macOS
+	case "darwin":
 		// Requires root privileges usually
 		cmd = exec.Command("shutdown", "-h", "now")
 		log.Println("警告: macOS 关机通常需要 root 权限。")
@@ -358,8 +407,7 @@ func enableStartup(appName string, executablePath string) error {
 		return fmt.Errorf("启用开机自启仅支持 Windows")
 	}
 	// 注意：路径中可能包含空格，需要用引号括起来，以便命令行正确解析
-	// registry 包会自动处理，但如果手动构造命令行则需要注意
-	// quotedPath := fmt.Sprintf(`"%s"`, executablePath) // 移除：未使用
+	// registry package handles quoting if necessary
 
 	key, _, err := registry.CreateKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Run`, registry.SET_VALUE)
 	if err != nil {
@@ -425,7 +473,7 @@ func getAllLocalIPs() []IPInfo {
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		log.Printf("获取网络接口失败: %v", err)
-		return ips // Return empty list
+		return ips
 	}
 
 	for _, i := range interfaces {
@@ -459,7 +507,7 @@ func getAllLocalIPs() []IPInfo {
 			}
 			ip = ip.To4() // Ensure it's IPv4
 			if ip == nil {
-				continue // Not an IPv4 address
+				continue
 			}
 
 			// Check if it's a private IP range
@@ -482,10 +530,10 @@ func getAllLocalIPs() []IPInfo {
 		isB192 := ipB[0] == 192 && ipB[1] == 168
 
 		if isA192 && !isB192 {
-			return true // A comes first
+			return true
 		}
 		if !isA192 && isB192 {
-			return false // B comes first
+			return false
 		}
 		// If both are 192.168 or both are not, sort by IP string
 		return ips[i].IP < ips[j].IP
@@ -573,32 +621,22 @@ func onReady() {
 	systray.SetTooltip("网页键鼠 - 正在启动...")
 
 	// --- Menu items ---
-	// Removed: mSelectedIP and mPrimaryIPTitle as per user feedback
-
-	// Sections for IP selection will be populated later
-	// Removed separator before IP list as per user feedback
-	// We will store references to the IP menu items later
+	// IP selection menus will be populated later
 	var primaryIpMenuItems []*systray.MenuItem // Slice for 192.168.x.x items
 	var otherIpMenuItems []*systray.MenuItem   // Slice for other IP items (in submenu)
-	// Primary IP items will be added dynamically here
-
-	// Placeholder for the submenu for other IPs
-	var mOtherIPsSubMenu *systray.MenuItem // Will be created if other IPs exist
-
-	// Removed separator before Startup item
+	var mOtherIPsSubMenu *systray.MenuItem     // Submenu for other IPs
 
 	// --- 开机自启菜单项 (仅 Windows) ---
 	var mStartup *systray.MenuItem
 	if runtime.GOOS == "windows" {
-		mStartup = systray.AddMenuItemCheckbox("开机自启", "启用或禁用开机自启", false) // 初始状态未勾选
-		// Removed separator after startup item
+		mStartup = systray.AddMenuItemCheckbox("开机自启", "启用或禁用开机自启", false) // Initial state unchecked
 	}
 	// --- 结束开机自启菜单项 ---
 
-	// mQuit := systray.AddMenuItem("退出", "关闭应用程序") // MOVED TO BOTTOM
+	// Quit item is added at the end of startServerAndUpdateUI
 
 	// Goroutine to handle startup menu item clicks (仅 Windows)
-	if mStartup != nil { // 确保 mStartup 已初始化 (即在 Windows 上)
+	if mStartup != nil { // Check if mStartup was initialized (i.e., on Windows)
 		go func() {
 			// 先获取一次路径，避免在循环中重复获取
 			exePath, err := getExecutablePath()
@@ -663,28 +701,17 @@ func onReady() {
 		}()
 	}
 
-	// Goroutine to handle quit menu item clicks - MOVED TO BOTTOM
-	// go func() {
-	// 	<-mQuit.ClickedCh
-	// 	log.Println("收到退出菜单点击事件")
-	// 	triggerShutdown() // Initiate graceful shutdown
-	// }()
+	// Quit menu item handler is now part of startServerAndUpdateUI
 
 	// Start the server in a separate goroutine and update UI once ready
-	// Pass references to the menu items that need updating
-	// Removed mSelectedIP from parameters
 	go startServerAndUpdateUI(&primaryIpMenuItems, &otherIpMenuItems, &mOtherIPsSubMenu) // Pass pointers
-
-	// Quit item logic is now handled within startServerAndUpdateUI to ensure it's added last.
 
 	log.Println("onReady 执行完毕")
 }
 
 // startServerAndUpdateUI runs the server setup and updates the systray menu.
-// It now takes pointers to slices for primary and other IP menu items, and a pointer to the submenu item pointer.
-// Removed mSelectedIP parameter
+// Takes pointers to menu item slices and the submenu pointer for dynamic updates.
 func startServerAndUpdateUI(primaryIpMenuItems *[]*systray.MenuItem, otherIpMenuItems *[]*systray.MenuItem, mOtherIPsSubMenu **systray.MenuItem) {
-	// Get all local IPs
 	ipList := getAllLocalIPs()
 	port := defaultPort
 
@@ -696,7 +723,7 @@ func startServerAndUpdateUI(primaryIpMenuItems *[]*systray.MenuItem, otherIpMenu
 		if strings.Contains(strings.ToLower(ipInfo.InterfaceName), "vmware") {
 			otherIPs = append(otherIPs, ipInfo)
 			log.Printf("接口 %s (%s) 包含 'vmware'，归类到其他地址。", ipInfo.InterfaceName, ipInfo.IP)
-			continue // Skip further checks for this IP
+			continue
 		}
 
 		ip := net.ParseIP(ipInfo.IP)
@@ -776,8 +803,6 @@ func startServerAndUpdateUI(primaryIpMenuItems *[]*systray.MenuItem, otherIpMenu
 	tooltip := fmt.Sprintf("网页键鼠 - %s", accessURL)
 	systray.SetTooltip(tooltip)
 
-	// Removed updates for mSelectedIP
-
 	// --- Populate Systray IP Menu Items ---
 	// Clear existing slices (important if this function were called multiple times, though it's not currently)
 	*primaryIpMenuItems = (*primaryIpMenuItems)[:0]
@@ -799,10 +824,9 @@ func startServerAndUpdateUI(primaryIpMenuItems *[]*systray.MenuItem, otherIpMenu
 				// Update UI elements
 				newAccessURL := fmt.Sprintf("http://%s:%d", currentIP, port)
 				newTooltip := fmt.Sprintf("网页键鼠 - %s", newAccessURL)
-				// Removed updates for mSelectedIP
 				systray.SetTooltip(newTooltip)
 
-				// Checkmark logic removed as requested.
+				// Checkmark logic removed.
 
 				// Optional: Trigger self-check with new IP
 				// go checkConnectionAndFirewall(port)
@@ -813,58 +837,47 @@ func startServerAndUpdateUI(primaryIpMenuItems *[]*systray.MenuItem, otherIpMenu
 	// Populate primary IPs (192.168.x.x) directly in the main menu
 	for _, ipInfo := range primaryIPs {
 		ipStr := ipInfo.IP
-		// ifName := ipInfo.InterfaceName // Interface name no longer needed for display text
 		menuText := fmt.Sprintf("可尝试IP：%s:%d", ipStr, port)
-		// Add normal menu item (no checkbox)
 		menuItem := systray.AddMenuItem(menuText, fmt.Sprintf("选择 %s:%d 作为访问地址", ipStr, port))
-		*primaryIpMenuItems = append(*primaryIpMenuItems, menuItem) // Store reference
-		createClickHandler(menuItem, ipStr)                         // Attach click handler
+		*primaryIpMenuItems = append(*primaryIpMenuItems, menuItem)
+		createClickHandler(menuItem, ipStr)
 	}
 
 	// Populate other IPs in a submenu if they exist
 	if len(otherIPs) > 0 {
-		// Create the submenu if it doesn't exist (it shouldn't on first run, but check defensively)
 		if *mOtherIPsSubMenu == nil {
 			*mOtherIPsSubMenu = systray.AddMenuItem("其他检测地址", "其他检测到的非 192.168 IP 地址")
 		} else {
-			// If it somehow exists but was hidden, show it again
-			(*mOtherIPsSubMenu).Show()
+			(*mOtherIPsSubMenu).Show() // Ensure visible if reused
 		}
-		// Add items to the submenu
 		for _, ipInfo := range otherIPs {
 			ipStr := ipInfo.IP
-			// ifName := ipInfo.InterfaceName // Interface name no longer needed for display text
 			menuText := fmt.Sprintf("可尝试IP：%s:%d", ipStr, port)
-			// Add normal submenu item (no checkbox)
 			menuItem := (*mOtherIPsSubMenu).AddSubMenuItem(menuText, fmt.Sprintf("选择 %s:%d 作为访问地址", ipStr, port))
-			*otherIpMenuItems = append(*otherIpMenuItems, menuItem) // Store reference
-			createClickHandler(menuItem, ipStr)                     // Attach click handler
+			*otherIpMenuItems = append(*otherIpMenuItems, menuItem)
+			createClickHandler(menuItem, ipStr)
 		}
 	} else {
-		// Optionally hide or disable the submenu placeholder if no other IPs found
 		if *mOtherIPsSubMenu != nil {
-			(*mOtherIPsSubMenu).Hide() // Or Disable()
+			(*mOtherIPsSubMenu).Hide() // Hide if no other IPs
 		}
 	}
 	// --- End Systray IP Menu Item Population ---
 
-	// Send startup notification using the default selected IP - Updated text
 	notify("网页键鼠已启动", fmt.Sprintf("请访问: %s\n(如无法访问，请右键托盘图标查看其他可尝试IP)", accessURL), "")
 
-	// Start self-check in a goroutine using the initially selected IP
-	go checkConnectionAndFirewall(port) // checkConnectionAndFirewall now reads global selectedIP
+	go checkConnectionAndFirewall(port) // Start self-check
 
 	// --- Add Quit Item at the very end ---
-	systray.AddSeparator() // Separator before Quit
+	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("退出", "关闭应用程序")
 	go func() {
 		<-mQuit.ClickedCh
 		log.Println("收到退出菜单点击事件")
-		triggerShutdown() // Initiate graceful shutdown
+		triggerShutdown()
 	}()
 	// --- End Quit Item ---
 
-	// Setup HTTP routes
 	http.HandleFunc("/", serveHome)
 	http.HandleFunc("/ws", handleConnections)
 
@@ -893,7 +906,6 @@ func startServerAndUpdateUI(primaryIpMenuItems *[]*systray.MenuItem, otherIpMenu
 
 // onExit runs when the systray is exiting.
 func onExit() {
-	// Clean up here
 	log.Println("Systray onExit 开始执行")
 	// Ensure shutdown is triggered if not already done (e.g., via OS signal)
 	triggerShutdown()
@@ -914,21 +926,16 @@ func triggerShutdown() {
 				log.Println("服务器已成功关闭。")
 			}
 		}
+
+		// stopCursorLoop removed
+
 		log.Println("请求退出 Systray...")
 		systray.Quit() // Signal the main loop to exit
 	})
 }
 
-// runServer is now deprecated/removed as its logic is moved into startServerAndUpdateUI
-/*
-func runServer() (string, int) {
-	// ... (previous content moved to startServerAndUpdateUI) ...
-}
-*/
-
 func main() {
-	// Setup logging early
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	log.SetFlags(log.LstdFlags | log.Lshortfile) // Setup logging early
 
 	// Start the systray loop. onReady will be called when it's ready.
 	// onExit will be called when systray.Quit() is called or the process terminates.
